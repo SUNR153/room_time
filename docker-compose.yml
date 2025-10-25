@@ -1,0 +1,49 @@
+version: '3.9'
+
+services:
+  # --- Django-приложение ---
+  web:
+    build: .
+    command: gunicorn roomtime.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
+  # --- База данных PostgreSQL ---
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: roomtime
+      POSTGRES_USER: roomtime_user
+      POSTGRES_PASSWORD: roomtime_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # --- Redis ---
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  # --- Celery worker ---
+  celery:
+    build: .
+    command: celery -A roomtime worker -l info
+    volumes:
+      - .:/app
+    depends_on:
+      - web
+      - redis
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:

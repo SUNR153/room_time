@@ -1,0 +1,25 @@
+python -m venv myvenv //для создания виртуального окружения
+myvenv\Scripts\activate // для активации виртуального окружения
+pip instal -r req.txt // для скачивания зависимостей/библиотек
+pip freeze > req.txt // для записи необходимых библиотек/зависимостей
+python manage.py makemigration // для создания миграций
+python manage.py migrate // для добавления миграций в бд
+python manage.py runserve // для запуска проекта
+python manage.py createsuperuser // для создания админа
+django-admin startapp <appname> // для создания приложения
+django-admin startproject <projectname> . // для создания проекта
+pip install <название библиотек/зависимостей> // для загрузки библиотек/зависимостей
+
+на этом с командами в терминале все 
+тут есть лишние команды я оставил их специально вам на будущее когда будете уже сами все делать
+снизу я оставлю команды которые нужны сейчас
+
+python -m venv myvenv //для создания виртуального окружения
+myvenv\Scripts\activate // для активации виртуального окружения
+pip instal -r req.txt // для скачивания зависимостей/библиотек
+python manage.py makemigration // для создания миграций
+python manage.py migrate // для добавления миграций в бд
+python manage.py runserve // для запуска проекта
+python manage.py createsuperuser // для создания админа
+
+вроде все если что я потом буду дополнять
