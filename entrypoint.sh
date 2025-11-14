@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e  # при ошибке контейнер сразу завершится
+set -e
 
 echo "Running migrations..."
 python manage.py migrate --noinput
