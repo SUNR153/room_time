@@ -1,11 +1,15 @@
 #!/bin/sh
-set -e
+# Ждём базу
+echo "Waiting for PostgreSQL..."
+while ! nc -z db 5432; do
+  sleep 0.1
+done
+echo "PostgreSQL is ready"
 
-echo "Running migrations..."
-python manage.py migrate --noinput
-
-echo "Collecting static files..."
+# Собираем статические файлы (можно опционально)
+mkdir -p /app/static
 python manage.py collectstatic --noinput
 
-echo "Starting application..."
-exec "$@"
+# Запускаем Gunicorn
+exec gunicorn roomtime.wsgi:application --bind 0.0.0.0:8000
+

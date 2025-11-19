@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-
+from django.conf import settings
 
 class TimeSlot(models.Model):
     STATUS_CHOICES = [
@@ -38,8 +38,8 @@ class Booking(models.Model):
         ('confirmed', 'Confirmed'),
         ('cancelled', 'Cancelled'),
     ]
-    
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     resource_id = models.IntegerField()
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
