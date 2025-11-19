@@ -29,7 +29,7 @@ services:
   # --- 3️⃣ ОСНОВНЫЕ ПРИЛОЖЕНИЯ ---
   web:
     build: .
-    command: sh ./entrypoint.sh
+    command:  gunicorn roomtime.wsgi:application --bind 0.0.0.0:8000
     env_file:
       - .env
     volumes:

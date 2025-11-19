@@ -8,6 +8,7 @@ from .validators import default_file_validators, image_validators, document_vali
 User = get_user_model()
 
 
+
 def resource_file_upload_path(instance, filename):
     """Генерирует путь для загрузки файлов ресурсов"""
     ext = filename.split('.')[-1]
