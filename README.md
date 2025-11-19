@@ -58,7 +58,7 @@ cd room_time
 ```bash
 git checkout develop
 git pull origin develop   # Обнови до последней версии
-git checkout -b feature/add-booking-api
+git checkout -b feature/app_auth 
 ```
 
 Теперь ты в новой ветке:
