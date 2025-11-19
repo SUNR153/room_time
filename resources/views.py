@@ -4,6 +4,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+from datetime import datetime
+from .services import AvailabilityService
+from .cache import AvailabilityCache
 
 from .models import Resource, FileUpload
 from .serializers import (
@@ -243,3 +246,54 @@ class ResourceViewSet(viewsets.ViewSet):
 
         for key in cache_keys:
             cache.delete(key)
+
+        @action(detail=True, methods=['get'], url_path='availability')
+        def availability(self, request, pk=None):
+            """
+            GET /resources/{id}/availability?date=YYYY-MM-DD
+            Получение доступности ресурса на конкретную дату
+            """
+            resource = get_object_or_404(Resource, pk=pk)
+
+            # Проверяем параметр date
+            date_str = request.query_params.get('date')
+            if not date_str:
+                return Response(
+                    {'error': 'Параметр date обязателен (формат: YYYY-MM-DD)'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response(
+                    {'error': 'Неверный формат даты. Используйте YYYY-MM-DD'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Проверяем, что дата не в прошлом
+            if date < datetime.now().date():
+                return Response(
+                    {'error': 'Нельзя запросить доступность для прошедшей даты'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Получаем доступность через сервис (с кешированием)
+            availability_data = AvailabilityService.get_resource_availability(resource.id, date)
+
+            return Response(availability_data)
+
+        @action(detail=False, methods=['get'], url_path='cache-stats')
+        def cache_stats(self, request):
+            """
+            GET /resources/cache-stats
+            Статистика кеша доступности (только для админов)
+            """
+            if not request.user.is_authenticated or request.user.role != 'admin':
+                return Response(
+                    {'error': 'Доступ запрещен'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            stats = AvailabilityCache.get_availability_stats()
+            return Response(stats)
