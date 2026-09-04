@@ -1,3 +1,12 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import Payment
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ['transaction_id', 'booking', 'amount', 'status', 'method', 'created_at', 'paid_at']
+    list_filter = ['status', 'method', 'created_at']
+    search_fields = ['transaction_id', 'booking__user__email']
+    readonly_fields = ['transaction_id', 'created_at']
+    ordering = ['-created_at']

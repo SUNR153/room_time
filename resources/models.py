@@ -33,6 +33,13 @@ class Resource(models.Model):
         verbose_name='Вместимость',
         help_text='Максимальное количество человек'
     )
+    price_per_hour = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name='Цена за час'
+    )
     file_path = models.FileField(
         upload_to=resource_file_upload_path,
         null=True,
@@ -119,6 +126,10 @@ class FileUpload(models.Model):
 
     def __str__(self):
         return f"{self.original_filename} ({self.owner_user.email})"
+
+    @property
+    def file_size_mb(self):
+        return round(self.size_bytes / (1024 * 1024), 2)
 
     def delete(self, *args, **kwargs):
         """Удаляет физический файл при удалении записи"""

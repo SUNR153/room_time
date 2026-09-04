@@ -152,3 +152,40 @@ class BookingFlowTests(TestCase):
         self.client.force_authenticate(user=self.other_user)
         response = self.client.get(reverse('bookings:detail', args=[booking_id]))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ExpireStaleHoldsTaskTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='user@example.com', password='pass12345')
+        self.resource = Resource.objects.create(
+            name='Meeting Room A', location='2nd floor', capacity=6, is_active=True,
+        )
+
+    def make_booking(self, status_, created_at):
+        booking = Booking.objects.create(
+            user=self.user,
+            resource=self.resource,
+            starts_at=timezone.now() + timedelta(hours=2),
+            ends_at=timezone.now() + timedelta(hours=3),
+            status=status_,
+        )
+        Booking.objects.filter(pk=booking.pk).update(created_at=created_at)
+        booking.refresh_from_db()
+        return booking
+
+    def test_expires_stale_pending_holds(self):
+        from .tasks import expire_stale_holds
+
+        stale = self.make_booking('pending', timezone.now() - timedelta(minutes=20))
+        fresh = self.make_booking('pending', timezone.now())
+        confirmed = self.make_booking('confirmed', timezone.now() - timedelta(minutes=20))
+
+        expired_count = expire_stale_holds()
+
+        self.assertEqual(expired_count, 1)
+        stale.refresh_from_db()
+        fresh.refresh_from_db()
+        confirmed.refresh_from_db()
+        self.assertEqual(stale.status, 'cancelled')
+        self.assertEqual(fresh.status, 'pending')
+        self.assertEqual(confirmed.status, 'confirmed')

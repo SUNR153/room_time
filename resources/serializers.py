@@ -11,7 +11,7 @@ class ResourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resource
         fields = [
-            'id', 'name', 'location', 'capacity',
+            'id', 'name', 'location', 'capacity', 'price_per_hour',
             'file_path', 'file_url', 'has_file',
             'is_active', 'created_at', 'updated_at'
         ]
@@ -31,7 +31,7 @@ class ResourceCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ['name', 'location', 'capacity', 'is_active']
+        fields = ['name', 'location', 'capacity', 'price_per_hour', 'is_active']
 
     def validate_capacity(self, value):
         """Валидация вместимости"""
@@ -45,7 +45,7 @@ class ResourceUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ['name', 'location', 'capacity', 'is_active']
+        fields = ['name', 'location', 'capacity', 'price_per_hour', 'is_active']
 
     def validate_capacity(self, value):
         """Валидация вместимости"""

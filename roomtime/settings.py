@@ -110,6 +110,13 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 
+CELERY_BEAT_SCHEDULE = {
+    'expire-stale-booking-holds': {
+        'task': 'bookings.tasks.expire_stale_holds',
+        'schedule': 120.0,  # every 2 minutes
+    },
+}
+
 
 
 # Password validation
