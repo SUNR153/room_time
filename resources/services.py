@@ -59,8 +59,8 @@ class AvailabilityService:
             # Получаем бронирования, если модель Booking доступна
             bookings = []
             if Booking:
-                start_of_day = datetime.combine(date, datetime.min.time())
-                end_of_day = datetime.combine(date, datetime.max.time())
+                start_of_day = timezone.make_aware(datetime.combine(date, datetime.min.time()))
+                end_of_day = timezone.make_aware(datetime.combine(date, datetime.max.time()))
 
                 bookings = Booking.objects.filter(
                     resource_id=resource_id,
@@ -132,8 +132,8 @@ class AvailabilityService:
             slot_duration = cls.DEFAULT_SLOT_DURATION
 
         slots = []
-        current_time = datetime.combine(date, datetime.min.time().replace(hour=start_hour))
-        end_time = datetime.combine(date, datetime.min.time().replace(hour=end_hour))
+        current_time = timezone.make_aware(datetime.combine(date, datetime.min.time().replace(hour=start_hour)))
+        end_time = timezone.make_aware(datetime.combine(date, datetime.min.time().replace(hour=end_hour)))
 
         while current_time < end_time:
             slot_end = current_time + timedelta(minutes=slot_duration)

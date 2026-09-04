@@ -1,9 +1,10 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from datetime import datetime
 from .services import AvailabilityService
 from .cache import AvailabilityCache
@@ -28,6 +29,8 @@ class ResourceViewSet(viewsets.ViewSet):
         """
         if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload_file']:
             permission_classes = [IsAdminUser]
+        elif self.action in ['list', 'retrieve', 'availability', 'cache_stats']:
+            permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
@@ -67,7 +70,8 @@ class ResourceViewSet(viewsets.ViewSet):
         resource = get_object_or_404(Resource, pk=pk)
 
         # Проверяем, активен ли ресурс или пользователь - администратор
-        if not resource.is_active and not (request.user.role == 'admin'):
+        is_admin = request.user.is_authenticated and request.user.role == 'admin'
+        if not resource.is_active and not is_admin:
             return Response(
                 {'error': 'Ресурс не найден или неактивен'},
                 status=status.HTTP_404_NOT_FOUND
@@ -242,58 +246,63 @@ class ResourceViewSet(viewsets.ViewSet):
         ]
 
         # Инвалидируем кеш доступности для всех дат
-        cache.delete_many([key for key in cache._cache.keys() if key.startswith('avail:')])
+        try:
+            cache.delete_pattern('avail:*')
+        except AttributeError:
+            # Бэкенд кеша не поддерживает delete_pattern (например, LocMemCache в тестах)
+            pass
 
         for key in cache_keys:
             cache.delete(key)
 
-        @action(detail=True, methods=['get'], url_path='availability')
-        def availability(self, request, pk=None):
-            """
-            GET /resources/{id}/availability?date=YYYY-MM-DD
-            Получение доступности ресурса на конкретную дату
-            """
-            resource = get_object_or_404(Resource, pk=pk)
+    @action(detail=True, methods=['get'], url_path='availability')
+    def availability(self, request, pk=None):
+        """
+        GET /resources/{id}/availability?date=YYYY-MM-DD
+        Получение доступности ресурса на конкретную дату
+        """
+        resource = get_object_or_404(Resource, pk=pk)
 
-            # Проверяем параметр date
-            date_str = request.query_params.get('date')
-            if not date_str:
-                return Response(
-                    {'error': 'Параметр date обязателен (формат: YYYY-MM-DD)'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        # Проверяем параметр date
+        date_str = request.query_params.get('date')
+        if not date_str:
+            return Response(
+                {'error': 'Параметр date обязателен (формат: YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-            try:
-                date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            except ValueError:
-                return Response(
-                    {'error': 'Неверный формат даты. Используйте YYYY-MM-DD'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        try:
+            date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Неверный формат даты. Используйте YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-            # Проверяем, что дата не в прошлом
-            if date < datetime.now().date():
-                return Response(
-                    {'error': 'Нельзя запросить доступность для прошедшей даты'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        # Проверяем, что дата не в прошлом
+        if date < datetime.now().date():
+            return Response(
+                {'error': 'Нельзя запросить доступность для прошедшей даты'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-            # Получаем доступность через сервис (с кешированием)
-            availability_data = AvailabilityService.get_resource_availability(resource.id, date)
+        # Получаем доступность через сервис (с кешированием)
+        availability_data = AvailabilityService.get_resource_availability(resource.id, date)
 
-            return Response(availability_data)
+        return Response(availability_data)
 
-        @action(detail=False, methods=['get'], url_path='cache-stats')
-        def cache_stats(self, request):
-            """
-            GET /resources/cache-stats
-            Статистика кеша доступности (только для админов)
-            """
-            if not request.user.is_authenticated or request.user.role != 'admin':
-                return Response(
-                    {'error': 'Доступ запрещен'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+    @action(detail=False, methods=['get'], url_path='cache-stats')
+    def cache_stats(self, request):
+        """
+        GET /resources/cache-stats
+        Статистика кеша доступности (только для админов)
+        """
+        if not request.user.is_authenticated or request.user.role != 'admin':
+            return Response(
+                {'error': 'Доступ запрещен'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-            stats = AvailabilityCache.get_availability_stats()
-            return Response(stats)
+        stats = AvailabilityCache.get_availability_stats()
+        return Response(stats)
+

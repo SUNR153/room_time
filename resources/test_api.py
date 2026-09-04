@@ -49,7 +49,7 @@ class ResourceAPITestCase(TestCase):
     def test_get_resource_availability(self):
         """Тест получения доступности ресурса"""
         response = self.client.get(
-            f'/api/resources/{self.resource.id}/availability?date={self.tomorrow}'
+            f'/api/resources/{self.resource.id}/availability/?date={self.tomorrow}'
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('slots', response.data)
@@ -58,12 +58,12 @@ class ResourceAPITestCase(TestCase):
 
     def test_get_resource_availability_no_date(self):
         """Тест получения доступности без даты"""
-        response = self.client.get(f'/api/resources/{self.resource.id}/availability')
+        response = self.client.get(f'/api/resources/{self.resource.id}/availability/')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_get_resource_availability_invalid_date(self):
         """Тест получения доступности с неверной датой"""
         response = self.client.get(
-            f'/api/resources/{self.resource.id}/availability?date=invalid-date'
+            f'/api/resources/{self.resource.id}/availability/?date=invalid-date'
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

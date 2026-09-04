@@ -277,6 +277,25 @@ class ImageDimensionsValidator:
             )
 
 
+class FileValidator:
+    """
+    Композитный валидатор: прогоняет файл через набор default_file_validators
+    и умеет определять MIME-тип по имени файла (используется при загрузке
+    файлов ресурса в resources/views.py).
+    """
+
+    def __init__(self, validators=None):
+        self.validators = validators if validators is not None else default_file_validators
+        self._mime_validator = MimeTypeValidator()
+
+    def __call__(self, value):
+        for validator in self.validators:
+            validator(value)
+
+    def get_mime_type(self, filename):
+        return self._mime_validator._get_mime_type_by_extension(filename)
+
+
 # Готовые валидаторы для удобства использования
 default_file_validators = [
     FileSizeValidator(max_size_mb=10),

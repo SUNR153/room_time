@@ -67,7 +67,12 @@ class Resource(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.name} ({self.location})"
+        status = 'Активен' if self.is_active else 'Неактивен'
+        return f"{self.name} ({self.location}) - {status}"
+
+    @property
+    def has_file(self):
+        return bool(self.file_path)
 
 
 class FileUpload(models.Model):
