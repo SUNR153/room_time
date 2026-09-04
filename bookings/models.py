@@ -1,5 +1,4 @@
 from django.db import models
-from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.conf import settings
@@ -10,21 +9,21 @@ class TimeSlot(models.Model):
         ('hold', 'Hold'),
         ('booked', 'Booked'),
     ]
-    
-    resource_id = models.IntegerField()
+
+    resource = models.ForeignKey('resources.Resource', on_delete=models.CASCADE, related_name='time_slots')
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        unique_together = ['resource_id', 'starts_at', 'ends_at']
+        unique_together = ['resource', 'starts_at', 'ends_at']
         indexes = [
-            models.Index(fields=['resource_id', 'starts_at']),
+            models.Index(fields=['resource', 'starts_at']),
             models.Index(fields=['status']),
         ]
-    
+
     def clean(self):
         if self.starts_at >= self.ends_at:
             raise ValidationError('Start time must be before end time')
@@ -39,22 +38,22 @@ class Booking(models.Model):
         ('cancelled', 'Cancelled'),
     ]
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    resource_id = models.IntegerField()
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bookings')
+    resource = models.ForeignKey('resources.Resource', on_delete=models.CASCADE, related_name='bookings')
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     idempotency_key = models.CharField(max_length=255, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         indexes = [
             models.Index(fields=['user', 'status']),
-            models.Index(fields=['resource_id', 'starts_at']),
+            models.Index(fields=['resource', 'starts_at']),
             models.Index(fields=['idempotency_key']),
         ]
-    
+
     def clean(self):
         if self.starts_at >= self.ends_at:
             raise ValidationError('Start time must be before end time')

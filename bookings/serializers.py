@@ -9,7 +9,7 @@ class TimeSlotSerializer(serializers.ModelSerializer):
 
 
 class BookingHoldSerializer(serializers.Serializer):
-    resource_id = serializers.IntegerField()
+    resource_id = serializers.UUIDField()
     starts_at = serializers.DateTimeField()
     ends_at = serializers.DateTimeField()
 
