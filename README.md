@@ -1,220 +1,80 @@
-# room_time
+# RoomTime
 
----
+REST API для аренды помещений/площадок с онлайн-оплатой: каталог ресурсов, бронирование по времени с защитой от двойного бронирования, оплата и уведомления.
 
-# 🧠 Гайд: как правильно работать с GitHub в команде
+## Возможности
 
----
+- JWT-аутентификация (регистрация, логин, refresh, logout с блэклистингом токена)
+- Каталог ресурсов (переговорки, залы и т.п.) с ценой за час и вложениями (фото/документы)
+- Проверка доступности по дням с почасовыми слотами и кэшированием в Redis
+- Бронирование по схеме **hold → confirm**: временное удержание слота на 10 минут, транзакционная защита от гонок при пересечении времени
+- Автоматическое освобождение неподтверждённых holds по расписанию (Celery beat)
+- Оплата подтверждённых бронирований (сумма считается по длительности × цена ресурса)
+- Уведомления пользователю о ключевых событиях (оплата и т.д.)
 
-## ⚙️ 1 Первичная настройка Git
+## Стек
 
-Если впервые работаешь с Git на компе — настрой имя и почту (они идут в историю коммитов):
+- **Backend:** Django, Django REST Framework, drf-spectacular (OpenAPI)
+- **Auth:** JWT (djangorestframework-simplejwt) + блэклист токенов
+- **DB:** PostgreSQL
+- **Кэш / очереди:** Redis, Celery (+ Celery Beat для периодических задач)
+- **Инфраструктура:** Docker / docker-compose
+
+## Запуск через Docker
 
 ```bash
-git config --global user.name "Твоё Имя"
-git config --global user.email "твоя_почта@email.com"
+docker compose up --build
 ```
 
-Проверить:
+Поднимет Django, PostgreSQL и Redis согласно `.env` (см. `.env.example`).
+
+## Запуск локально (без Docker)
 
 ```bash
-git config --list
+python -m venv myvenv
+myvenv\Scripts\activate       # Windows
+
+pip install -r requirements.txt
+
+cp .env.example .env
 ```
 
----
-
-## 🧩 2 Клонирование репозитория
-
-Берёшь ссылку с GitHub (вкладка **Code → HTTPS**)
-и клонируешь проект к себе:
+В `.env` укажи `POSTGRES_HOST=localhost` и `REDIS_HOST=localhost` (по умолчанию там имена Docker-сервисов `db`/`redis`) и подними Postgres + Redis локально.
 
 ```bash
-git clone https://github.com/SUNR153/room_time
+python manage.py migrate
+python manage.py runserver
 ```
 
-Переходишь в проект:
+Для фоновых задач (автоистечение holds) отдельно нужен воркер и планировщик:
 
 ```bash
-cd room_time
+celery -A roomtime worker --pool=solo -l info
+celery -A roomtime beat -l info
 ```
 
----
-
-## 🌿 3 Основные ветки проекта
-
-👉 Обычно есть две главные ветки:
-
-* `main` — **чистая продакшен-ветка**, сюда вливается только проверенный код
-* `develop` — **разработка**, сюда пушат фичи перед объединением в main
-
-Все остальные ветки — временные (feature, bugfix, hotfix и т.д.)
-
----
-
-## 🔧 4 Как создать свою ветку
-
-Перед началом любой задачи — **создай ветку от main или develop:**
+## Тесты
 
 ```bash
-git checkout develop
-git pull origin develop   # Обнови до последней версии
-git checkout -b feature/app_auth 
+python manage.py test
 ```
 
-Теперь ты в новой ветке:
-`feature/add-booking-api`
+## Основные эндпоинты
 
----
+| Метод | Путь | Описание |
+|---|---|---|
+| POST | `/auth/register/` | Регистрация |
+| POST | `/auth/login/` | Логин, выдаёт JWT access/refresh |
+| POST | `/auth/refresh/` | Обновление access-токена |
+| POST | `/auth/logout/` | Логаут (блэклист refresh-токена) |
+| GET | `/auth/me/` | Текущий пользователь |
+| GET | `/api/resources/` | Каталог ресурсов |
+| GET | `/api/resources/<id>/availability/?date=YYYY-MM-DD` | Доступность по дням |
+| POST | `/api/bookings/hold/` | Создать hold на слот |
+| POST | `/api/bookings/confirm/` | Подтвердить hold |
+| POST | `/api/bookings/<id>/cancel/` | Отменить бронирование |
+| GET | `/api/bookings/mine/` | Мои бронирования |
+| POST | `/api/payments/pay/` | Оплатить подтверждённое бронирование |
+| GET | `/api/notifications/` | Мои уведомления |
 
-## 💻 5 Работа с кодом
-
-Пиши код, коммить только **готовые и рабочие куски** — никаких временных файлов или говнокода.
-
----
-
-## 🧱 6 Добавление изменений
-
-Когда закончил писать:
-
-```bash
-git add .
-```
-
-(или конкретный файл, если хочешь частично)
-
-```bash
-git add core/views.py
-```
-
----
-
-## 🧾 7 Коммит (фиксация изменений)
-
-Делай **осмысленные коммиты**, без "update", "fix" и "ааа блять".
-
-✅ Хорошие примеры:
-
-```bash
-git commit -m "Добавил эндпоинт для бронирования комнат"
-git commit -m "Исправил баг с валидацией даты в модели Room"
-git commit -m "Добавил Celery задачу для очистки старых бронирований"
-```
-
----
-
-## 🚀 8 Отправка на GitHub
-
-Отправляешь ветку на сервер:
-
-```bash
-git push origin feature/add-booking-api
-```
-
-Если впервые пушишь эту ветку — добавь `-u`:
-
-```bash
-git push -u origin feature/add-booking-api
-```
-
----
-
-## 🔄 9 Pull Request (PR)
-
-Идёшь на GitHub → открываешь свой репозиторий →
-видишь кнопку **“Compare & Pull Request”** → нажимаешь.
-
-Там:
-
-* Пиши нормальное описание, что ты сделал
-* Выбери цель для merge — обычно **в `develop`**
-* Создай PR
-
-После ревью тимлид (или ты сам, если проект свой) делает merge.
-
----
-
-## ⚡ 11 Обновление локального проекта
-
-Перед тем как начать новую задачу — **всегда обновляй проект:**
-
-```bash
-git checkout develop
-git pull origin develop
-```
-
-Если твоя ветка уже создана — подтяни свежие изменения:
-
-```bash
-git checkout feature/add-booking-api
-git pull origin develop
-```
-
----
-
-## 🧨 11 Что нельзя делать
-
-🚫 Не коммить мусор:
-
-* `.venv/`, `__pycache__/`, `.idea/`, `.vscode/`
-* `.env`, `db.sqlite3`, локальные ключи и пароли
-
-🚫 Не пушь напрямую в `main`
-(только через Pull Request, иначе можно всё сломать)
-
-🚫 Не делай 10 коммитов подряд с текстом “fix”, “temp”, “try”
-
----
-
-## 🧩 12 Что делать, если косяк
-
-Если случайно закоммитил не то:
-
-```bash
-git reset HEAD~1
-```
-
-(отменит последний коммит, но оставит файлы)
-
-Если хочешь отменить изменения в файле:
-
-```bash
-git checkout -- path/to/file
-```
-
----
-
-## 🧠 13 Мини-шпаргалка
-
-| Команда                    | Что делает                   |
-| -------------------------- | ---------------------------- |
-| `git status`               | показывает изменения         |
-| `git add .`                | добавить все файлы           |
-| `git commit -m "..."`      | зафиксировать изменения      |
-| `git push`                 | отправить на GitHub          |
-| `git pull`                 | забрать последние изменения  |
-| `git branch`               | показать ветки               |
-| `git checkout branch_name` | переключиться на ветку       |
-| `git merge branch_name`    | слить другую ветку в текущую |
-
----
-
-## 🌍 14 Полный цикл работы
-
-Пример для любого из тимы:
-
-```bash
-# 1. Обновить проект
-git checkout develop
-git pull origin develop
-
-# 2. Создать ветку под задачу
-git checkout -b feature/add-booking-api
-
-# 3. Написать код, добавить изменения
-git add .
-git commit -m "Добавил API бронирования"
-
-# 4. Отправить на GitHub
-git push origin feature/add-booking-api
-
-# 5. Сделать Pull Request → дождаться ревью → Merge в develop
+Полная интерактивная документация (Swagger UI) — `/api/docs/`, OpenAPI-схема — `/api/schema/`.

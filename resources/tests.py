@@ -1,6 +1,9 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from datetime import datetime, timedelta
+from rest_framework import status
+from rest_framework.test import APIClient
 from .models import Resource
 from .services import AvailabilityService
 from .cache import AvailabilityCache
@@ -115,3 +118,74 @@ class CacheStatsTestCase(TestCase):
         self.assertIn('resources', stats)
         self.assertIsInstance(stats['total_cached_dates'], int)
         self.assertIsInstance(stats['resources'], dict)
+
+class ResourceMutationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email='admin@example.com', password='adminpass123', role='admin',
+        )
+        self.user = User.objects.create_user(
+            email='user@example.com', password='userpass123',
+        )
+        self.resource = Resource.objects.create(
+            name='Original Room', location='1st floor', capacity=4, is_active=True,
+        )
+
+    def test_create_requires_admin(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post('/api/resources/', {
+            'name': 'New Room', 'location': '3rd floor', 'capacity': 8,
+        })
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_create_resource(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post('/api/resources/', {
+            'name': 'New Room', 'location': '3rd floor', 'capacity': 8,
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(Resource.objects.filter(name='New Room').exists())
+
+    def test_admin_can_update_resource(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.put(f'/api/resources/{self.resource.id}/', {
+            'name': 'Updated Room', 'location': '1st floor', 'capacity': 4,
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.resource.refresh_from_db()
+        self.assertEqual(self.resource.name, 'Updated Room')
+
+    def test_destroy_deactivates_instead_of_deleting(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.delete(f'/api/resources/{self.resource.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.resource.refresh_from_db()
+        self.assertFalse(self.resource.is_active)
+        self.assertTrue(Resource.objects.filter(pk=self.resource.pk).exists())
+
+    def test_upload_file_requires_admin(self):
+        self.client.force_authenticate(user=self.user)
+        upload = SimpleUploadedFile('note.txt', b'hello world', content_type='text/plain')
+        response = self.client.post(f'/api/resources/{self.resource.id}/file/', {'file': upload})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_upload_and_delete_file(self):
+        self.client.force_authenticate(user=self.admin)
+        upload = SimpleUploadedFile('note.txt', b'hello world', content_type='text/plain')
+        response = self.client.post(f'/api/resources/{self.resource.id}/file/', {'file': upload})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        self.resource.refresh_from_db()
+        self.assertTrue(self.resource.has_file)
+
+        response = self.client.delete(f'/api/resources/{self.resource.id}/file/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.resource.refresh_from_db()
+        self.assertFalse(self.resource.has_file)
+
+    def test_upload_rejects_disallowed_extension(self):
+        self.client.force_authenticate(user=self.admin)
+        upload = SimpleUploadedFile('virus.exe', b'binary', content_type='application/octet-stream')
+        response = self.client.post(f'/api/resources/{self.resource.id}/file/', {'file': upload})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

@@ -18,6 +18,28 @@ from .permissions import IsAdminUser
 from .validators import FileValidator
 
 
+def _safe_cache_get(key):
+    """Reads from cache, degrading gracefully if the cache backend is unavailable."""
+    try:
+        return cache.get(key)
+    except Exception:
+        return None
+
+
+def _safe_cache_set(key, value, timeout):
+    try:
+        cache.set(key, value, timeout)
+    except Exception:
+        pass
+
+
+def _safe_cache_delete(key):
+    try:
+        cache.delete(key)
+    except Exception:
+        pass
+
+
 class ResourceViewSet(viewsets.ViewSet):
     """
     ViewSet для управления ресурсами
@@ -27,7 +49,7 @@ class ResourceViewSet(viewsets.ViewSet):
         """
         Определение прав доступа в зависимости от действия
         """
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload_file']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'file']:
             permission_classes = [IsAdminUser]
         elif self.action in ['list', 'retrieve', 'availability', 'cache_stats']:
             permission_classes = [AllowAny]
@@ -40,7 +62,7 @@ class ResourceViewSet(viewsets.ViewSet):
         GET /resources - список всех активных ресурсов
         """
         cache_key = 'active_resources_list'
-        cached_data = cache.get(cache_key)
+        cached_data = _safe_cache_get(cache_key)
 
         if cached_data is not None:
             return Response(cached_data)
@@ -53,7 +75,7 @@ class ResourceViewSet(viewsets.ViewSet):
         )
 
         # Кешируем на 60 секунд
-        cache.set(cache_key, serializer.data, 60)
+        _safe_cache_set(cache_key, serializer.data, 60)
 
         return Response(serializer.data)
 
@@ -62,7 +84,7 @@ class ResourceViewSet(viewsets.ViewSet):
         GET /resources/{id} - детали конкретного ресурса
         """
         cache_key = f'resource_detail_{pk}'
-        cached_data = cache.get(cache_key)
+        cached_data = _safe_cache_get(cache_key)
 
         if cached_data is not None:
             return Response(cached_data)
@@ -80,7 +102,7 @@ class ResourceViewSet(viewsets.ViewSet):
         serializer = ResourceSerializer(resource, context={'request': request})
 
         # Кешируем на 60 секунд
-        cache.set(cache_key, serializer.data, 60)
+        _safe_cache_set(cache_key, serializer.data, 60)
 
         return Response(serializer.data)
 
@@ -93,7 +115,7 @@ class ResourceViewSet(viewsets.ViewSet):
             resource = serializer.save()
 
             # Инвалидируем кеш списка ресурсов
-            cache.delete('active_resources_list')
+            _safe_cache_delete('active_resources_list')
 
             # Возвращаем полные данные ресурса
             full_serializer = ResourceSerializer(resource, context={'request': request})
@@ -155,11 +177,21 @@ class ResourceViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK
         )
 
-    @action(detail=True, methods=['post'], url_path='file')
-    def upload_file(self, request, pk=None):
+    @action(detail=True, methods=['post', 'delete'], url_path='file', url_name='file')
+    def file(self, request, pk=None):
         """
         POST /resources/{id}/file - загрузка файла для ресурса
+        DELETE /resources/{id}/file - удаление файла ресурса
+
+        DRF-роутер не объединяет два отдельных @action с одинаковым
+        url_path, поэтому загрузка и удаление файла реализованы одним
+        методом с диспетчеризацией по HTTP-методу.
         """
+        if request.method == 'DELETE':
+            return self._delete_file(request, pk)
+        return self._upload_file(request, pk)
+
+    def _upload_file(self, request, pk):
         resource = get_object_or_404(Resource, pk=pk)
 
         if 'file' not in request.FILES:
@@ -203,11 +235,7 @@ class ResourceViewSet(viewsets.ViewSet):
 
         return Response(file_serializer.data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['delete'], url_path='file')
-    def delete_file(self, request, pk=None):
-        """
-        DELETE /resources/{id}/file - удаление файла ресурса
-        """
+    def _delete_file(self, request, pk):
         resource = get_object_or_404(Resource, pk=pk)
 
         if not resource.file_path:
@@ -251,9 +279,12 @@ class ResourceViewSet(viewsets.ViewSet):
         except AttributeError:
             # Бэкенд кеша не поддерживает delete_pattern (например, LocMemCache в тестах)
             pass
+        except Exception:
+            # Redis недоступен — деградируем без падения запроса, как остальной AvailabilityCache
+            pass
 
         for key in cache_keys:
-            cache.delete(key)
+            _safe_cache_delete(key)
 
     @action(detail=True, methods=['get'], url_path='availability')
     def availability(self, request, pk=None):
